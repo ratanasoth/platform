@@ -173,10 +173,13 @@ class ReceiveMessage extends CreateUsecase
 		$content = $message->message;
 
 		if ($message->additional_data) {
-			if (isset($message->additional_data['form_id'])) {
-				$form_id = $message->additional_data['form_id'];
+			// @todo inject
+			$source = app('datasources')->getSource($message->data_source);
+			$formId = $source->getInboundFormId();
+
+			if ($formId) {
 				// Check provider fields for form attribute mapping
-				$inbound_fields = $message->additional_data['inbound_fields'];
+				$inbound_fields = $source->getInboundFieldMappings();
 
 				if (isset($this->payload['title']) && isset($inbound_fields['Title'])) {
 						$values[$inbound_fields['Title']] = array($this->payload['title']);
@@ -213,6 +216,7 @@ class ReceiveMessage extends CreateUsecase
 					}
 				}
 			}
+
 			// Pull locations from extra metadata
 			$values['message_location'] = [];
 			if (isset($message->additional_data['location'])) {
