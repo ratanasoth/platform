@@ -33,11 +33,6 @@ $plugin = array(
 			'rules' => array('required')
 		)
 	),
-	'inbound_fields' => array(
-		'From' => 'text',
-		'To' => 'text',
-		'Message' => 'text'
-	),
 
 		// Links
 	'links' => array(

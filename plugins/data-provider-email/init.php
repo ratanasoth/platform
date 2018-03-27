@@ -118,14 +118,7 @@ $plugin = array(
 			'input' => 'text',
 			'description' => 'Appears in the \'from:\' field on outgoing emails',
 			'rules' => array('required')
-		)
-	),
-	'inbound_fields' => array(
-		'From' => 'text',
-		'Subject' => 'text',
-		'To' => 'text',
-		'Date' => 'datetime',
-		'Message' => 'text'
+		),
 	),
 
 	// Links
@@ -135,3 +128,4 @@ $plugin = array(
 
 // Register the plugin
 DataProvider::register_provider('email', $plugin);
+

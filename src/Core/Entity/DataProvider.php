@@ -21,19 +21,17 @@ class DataProvider extends StaticEntity
 	protected $services;
 	protected $links;
 	protected $options;
-	protected $inbound_fields;
 
 	// DataTransformer
 	protected function getDefinition()
 	{
 		return [
-			'id'             	=> 'string',
-			'name'            => 'string',
-			'version'         => 'float',
-			'services'        => 'array',
-			'links'           => 'array',
-			'options'         => 'array',
-			'inbound_fields'  => 'array',
+			'id'       => 'string',
+			'name'     => 'string',
+			'version'  => 'float',
+			'services' => 'array',
+			'links'    => 'array',
+			'options'  => 'array',
 		];
 	}
 

@@ -37,7 +37,7 @@ class Signer
     public function validate($expectedSignature, $url, $data = array())
     {
         return self::compare(
-            $this->computeSignature($url, json_encode($data)),
+            $this->computeSignature($url, $data),
             $expectedSignature
         );
     }

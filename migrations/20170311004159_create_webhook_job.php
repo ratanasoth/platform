@@ -15,7 +15,8 @@ class CreateWebhookJob extends AbstractMigration
           ->addColumn('event_type', 'string', ['null' => false])
     		  ->addColumn('created', 'integer', ['default' => 0])
     		  ->addForeignKey('post_id', 'posts', 'id', [
-    				'delete' => 'CASCADE'
+    				'delete' => 'CASCADE',
+    				'update' => 'CASCADE',
     		  ])
     			->create();
     }

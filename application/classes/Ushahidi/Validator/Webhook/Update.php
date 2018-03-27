@@ -42,7 +42,7 @@ class Ushahidi_Validator_Webhook_Update extends Validator
 				['url']
 			],
 			'event_type' => [
-				['in_array', [':value', ['create', 'delete', 'update']]],
+				['in_array', [':value', ['create', 'delete', 'update', 'search']]],
 			],
 			'entity_type' => [
 				['in_array', [':value', ['post']]],

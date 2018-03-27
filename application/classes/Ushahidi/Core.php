@@ -248,7 +248,6 @@ abstract class Ushahidi_Core {
 		];
 		$di->params['Ushahidi\Factory\ValidatorFactory']['map']['posts'] = [
 			'create' => $di->lazyNew('Ushahidi_Validator_Post_Create'),
-			'webhook-update' => $di->lazyNew('Ushahidi_Validator_Post_Update'),
 			'update' => $di->lazyNew('Ushahidi_Validator_Post_Update'),
 			'import' => $di->lazyNew('Ushahidi_Validator_Post_Import'),
 		];
@@ -287,10 +286,6 @@ abstract class Ushahidi_Core {
 		$di->params['Ushahidi\Factory\ValidatorFactory']['map']['notifications'] = [
 			'create' => $di->lazyNew('Ushahidi_Validator_Notification_Create'),
 			'update' => $di->lazyNew('Ushahidi_Validator_Notification_Update'),
-		];
-		$di->params['Ushahidi\Factory\ValidatorFactory']['map']['apikeys'] = [
-			'create' => $di->lazyNew('Ushahidi_Validator_ApiKey_Create'),
-			'update' => $di->lazyNew('Ushahidi_Validator_ApiKey_Update'),
 		];
 		$di->params['Ushahidi\Factory\ValidatorFactory']['map']['webhooks'] = [
 			'create' => $di->lazyNew('Ushahidi_Validator_Webhook_Create'),
@@ -344,8 +339,7 @@ abstract class Ushahidi_Core {
 			'savedsearches_posts'  => $di->lazyNew('Ushahidi_Formatter_Post'),
 			'users'                => $di->lazyNew('Ushahidi_Formatter_User'),
 			'notifications'        => $di->lazyNew('Ushahidi_Formatter_Notification'),
-			'webhooks'             => $di->lazyNew('Ushahidi_Formatter_Webhook'),
-			'apikeys'              => $di->lazyNew('Ushahidi_Formatter_Apikey'),
+			'webhooks'              => $di->lazyNew('Ushahidi_Formatter_Webhook'),
 			'contacts'             => $di->lazyNew('Ushahidi_Formatter_Contact'),
 			'csv'                  => $di->lazyNew('Ushahidi_Formatter_CSV'),
 			'roles'                => $di->lazyNew('Ushahidi_Formatter_Role'),
@@ -374,7 +368,6 @@ abstract class Ushahidi_Core {
 			'set_post',
 			'notification',
 			'webhook',
-			'apikey',
 			'contact',
 			'role',
 			'permission',
@@ -443,7 +436,6 @@ abstract class Ushahidi_Core {
 		$di->set('repository.role', $di->lazyNew('Ushahidi_Repository_Role'));
 		$di->set('repository.notification', $di->lazyNew('Ushahidi_Repository_Notification'));
 		$di->set('repository.webhook', $di->lazyNew('Ushahidi_Repository_Webhook'));
-		$di->set('repository.apikey', $di->lazyNew('Ushahidi_Repository_ApiKey'));
 		$di->set('repository.csv', $di->lazyNew('Ushahidi_Repository_CSV'));
 		$di->set('repository.notification.queue', $di->lazyNew('Ushahidi_Repository_Notification_Queue'));
 		$di->set('repository.webhook.job', $di->lazyNew('Ushahidi_Repository_Webhook_Job'));
