@@ -25,11 +25,7 @@ use Ushahidi\Core\Usecase\Post\StatsPostRepository;
 use Ushahidi\Core\Usecase\Post\UpdatePostRepository;
 use Ushahidi\Core\Usecase\Set\SetPostRepository;
 use Ushahidi\Core\Traits\UserContext;
-use Ushahidi\Core\Traits\Permissions\ManagePosts;
-use Ushahidi\Core\Tool\Permissions\AclTrait;
-use Ushahidi\Core\Traits\AdminAccess;
-use Ushahidi\Core\Tool\Permissions\Permissionable;
-use Ushahidi\Core\Traits\PostValueRestrictions;
+use Ushahidi\Core\Tool\Permissions\InteractsWithPostPermissions;
 use Ushahidi\Core\Entity\ContactRepository;
 
 use Aura\DI\InstanceFactory;
@@ -50,15 +46,8 @@ class Ushahidi_Repository_Post extends Ushahidi_Repository implements
 	// Use the JSON transcoder to encode properties
 	use Ushahidi_JsonTranscodeRepository;
 
-	// Provides `acl`
-	use AclTrait;
-
-	// Checks if user is Admin
-	use AdminAccess;
-
-	// Check for value restrictions
-	// provides canUserReadPostsValues
-	use PostValueRestrictions;
+	// Provides `postPermissions`
+	use InteractsWithPostPermissions;
 
 	protected $form_attribute_repo;
 	protected $form_stage_repo;
@@ -66,12 +55,9 @@ class Ushahidi_Repository_Post extends Ushahidi_Repository implements
 	protected $contact_repo;
 	protected $post_value_factory;
 	protected $bounding_box_factory;
-	// By default remove all private responses
-	protected $restricted = true;
 
 	protected $include_value_types = [];
 	protected $include_attributes = [];
-	protected $exclude_stages = [];
 
 	protected $listener;
 
@@ -118,46 +104,65 @@ class Ushahidi_Repository_Post extends Ushahidi_Repository implements
 		// Ensure we are dealing with a structured Post
 
 		$user = $this->getUser();
+		$includePrivateValues = false;
+		$excludeStages = [];
+
+		// Check post permissions
+		// @todo move or double up in formatter. That should enforce what users can see
+		$includePrivateValues = $this->postPermissions->canUserReadPrivateValues($user, new Post($data));
+
+		$this->post_value_factory->getRepo('point')->hideLocation(!$this->postPermissions->canUserSeeLocation($user, new Post($data), $this->form_repo));
+
 		if ($data['form_id'])
 		{
-
-			if ($this->canUserReadPostsValues(new Post($data), $user, $this->form_repo)) {
-				$this->restricted = false;
-			}
 			// Get Hidden Stage Ids to be excluded from results
-			$status = $data['status'] ? $data['status'] : '';
-			$this->exclude_stages = $this->form_stage_repo->getHiddenStageIds($data['form_id'], $data['status']);
-
+			$excludeStages = $this->form_stage_repo->getHiddenStageIds($data['form_id'], $data['status']);
 		}
 
 		if (!empty($data['id']))
 		{
-			$data += [
-				'values' => $this->getPostValues($data['id']),
-				// Continued for legacy
-				'tags'   => $this->getTagsForPost($data['id'], $data['form_id']),
-				'sets' => $this->getSetsForPost($data['id']),
-				'completed_stages' => $this->getCompletedStagesForPost($data['id']),
-				'lock' => NULL,
-			];
-
-
-			if ($this->canUserSeePostLock(new Post($data), $user)) {
-				$data['lock'] = $this->getHydratedLock($data['id']);
-			}
-		}
-		// NOTE: This and the restriction above belong somewhere else,
-		// ideally in their own step
-		// Check if author information should be returned
-		if ($data['author_realname'] || $data['user_id'] || $data['author_email'])
-		{
-
-
-			if (!$this->canUserSeeAuthor(new Post($data), $this->form_repo, $user))
+			// NOTE: This and the restriction above belong somewhere else,
+			// ideally in their own step
+			// Check if time info should be returned
+			if (!$this->postPermissions->canUserSeeTime($user, new Post($data), $this->form_repo))
 			{
+				// Hide time on survey fields
+				$this->post_value_factory->getRepo('datetime')->hideTime(true);
+
+				// @todo move to formatter. That where this normally happens
+				// Replace time with 00:00:00
+				if ($postDate = date_create($data['post_date'], new \DateTimeZone('UTC'))) {
+					$data['post_date'] = $postDate->setTime(0, 0, 0)->format('Y-m-d H:i:s');
+				}
+				if ($created = date_create('@'.$data['created'], new \DateTimeZone('UTC'))) {
+					$data['created'] = $created->setTime(0, 0, 0)->format('U');
+				}
+				if ($updated = date_create('@'.$data['updated'], new \DateTimeZone('UTC'))) {
+					$data['updated'] = $updated->setTime(0, 0, 0)->format('U');
+				}
+			}
+
+			if (!$this->postPermissions->canUserSeeAuthor($user, new Post($data), $this->form_repo)
+				&& ($data['author_realname'] || $data['user_id'] || $data['author_email']))
+			{
+				// @todo move to formatter. That where this normally happens
 				unset($data['author_realname']);
 				unset($data['author_email']);
 				unset($data['user_id']);
+			}
+
+			$data += [
+				'values' => $this->getPostValues($data['id'], $includePrivateValues, $excludeStages),
+				// Continued for legacy
+				'tags'   => $this->getTagsForPost($data['id'], $data['form_id']),
+				'sets' => $this->getSetsForPost($data['id']),
+				'completed_stages' => $this->getCompletedStagesForPost($data['id'], $includePrivateValues, $excludeStages),
+				'lock' => NULL,
+			];
+
+			// @todo move or double up in formatter. That should enforce what users can see
+			if ($this->postPermissions->canUserSeePostLock($user, new Post($data))) {
+				$data['lock'] = $this->getHydratedLock($data['id']);
 			}
 		}
 
@@ -194,13 +199,13 @@ class Ushahidi_Repository_Post extends Ushahidi_Repository implements
 		return $query;
 	}
 
-	protected function getPostValues($id)
+	protected function getPostValues($id, $includePrivateValues, $excludeStages)
 	{
 
 		// Get all the values for the post. These are the EAV values.
 		$values = $this->post_value_factory
 			->proxy($this->include_value_types)
-			->getAllForPost($id, $this->include_attributes, $this->exclude_stages, $this->restricted);
+			->getAllForPost($id, $this->include_attributes, $excludeStages, $includePrivateValues);
 
 		$output = [];
 		foreach ($values as $value) {
@@ -214,17 +219,15 @@ class Ushahidi_Repository_Post extends Ushahidi_Repository implements
 		return $output;
 	}
 
-	protected function getCompletedStagesForPost($id)
+	protected function getCompletedStagesForPost($id, $includePrivateValues, $excludeStages)
 	{
 		$query = DB::select('form_stage_id', 'completed')
 			->from('form_stages_posts')
 			->where('post_id', '=', $id)
 			->where('completed', '=', 1);
 
-		if ($this->restricted) {
-			if ($this->exclude_stages) {
-				$query->where('form_stage_id', 'NOT IN', $this->exclude_stages);
-			}
+		if (!$includePrivateValues && $excludeStages) {
+			$query->where('form_stage_id', 'NOT IN', $excludeStages);
 		}
 
 		$result = $query->execute($this->db);
@@ -549,8 +552,7 @@ class Ushahidi_Repository_Post extends Ushahidi_Repository implements
 		if (!$search->exporter) {
 			if (!$user->id) {
 				$query->where("$table.status", '=', 'published');
-			} elseif (!$this->isUserAdmin($user) and
-					!$this->acl->hasPermission($user, Permission::MANAGE_POSTS)) {
+			} elseif (!$this->postPermissions->canUserViewUnpublishedPosts($user)) {
 				$query
 					->and_where_open()
 					->where("$table.status", '=', 'published')
@@ -953,7 +955,7 @@ class Ushahidi_Repository_Post extends Ushahidi_Repository implements
 		if ($entity->values)
 		{
 			// Update post-values
-			$this->updatePostValues($id, $values);
+			$this->updatePostValues($id, $values, false);
 		}
 
 		if ($entity->completed_stages)
@@ -1018,14 +1020,34 @@ class Ushahidi_Repository_Post extends Ushahidi_Repository implements
 		return $count;
 	}
 
-	protected function updatePostValues($post_id, $attributes)
+	protected function updatePostValues($post_id, $attributes, $update = true)
 	{
-		$this->post_value_factory->proxy()->deleteAllForPost($post_id);
+		$user = $this->getUser();
+		$exclude_types = [];
+		// HACK: If user cannot see time or location, don't clear values
+		if ($update && !$this->postPermissions->canUserSeeLocation($user, new Post(['id' => $post_id]), $this->form_repo)) {
+			$exclude_types[] = 'point';
+		}
+		if ($update && !$this->postPermissions->canUserSeeTime($user, new Post(['id' => $post_id]), $this->form_repo)) {
+			$exclude_types[] = 'datetime';
+		}
+
+		$this->post_value_factory->proxy([], $exclude_types)->deleteAllForPost($post_id);
 
 		foreach ($attributes as $key => $values)
 		{
 			$attribute = $this->form_attribute_repo->getByKey($key);
 			if (!$attribute->id) {
+				continue;
+			}
+
+			// HACK: If user cannot see locations, don't update
+			if ($update && $attribute->type === 'point' && !$this->postPermissions->canUserSeeLocation($user, new Post(['id' => $post_id]), $this->form_repo)) {
+				continue;
+			}
+
+			// HACK: If user cannot see time, don't update
+			if ($update && $attribute->type === 'datetime' && !$this->postPermissions->canUserSeeTime($user, new Post(['id' => $post_id]), $this->form_repo)) {
 				continue;
 			}
 

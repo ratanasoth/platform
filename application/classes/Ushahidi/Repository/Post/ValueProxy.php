@@ -16,20 +16,21 @@ class Ushahidi_Repository_Post_ValueProxy implements ValuesForPostRepository
 	protected $factory;
 	protected $include_types;
 
-	public function __construct(Ushahidi_Repository_Post_ValueFactory $factory, Array $include_types = [])
+	public function __construct(Ushahidi_Repository_Post_ValueFactory $factory, Array $include_types = [], Array $exclude_types = [])
 	{
 		$this->factory = $factory;
 		$this->include_types = $include_types;
+		$this->exclude_types = $exclude_types;
 	}
 
 	// ValuesForPostRepository
-	public function getAllForPost($post_id, Array $include_attributes = [], Array $exclude_stages = [], $restricted = false)
+	public function getAllForPost($post_id, Array $include_attributes = [], Array $exclude_stages = [], $includePrivateValues = false)
 	{
 		$results = [];
 
-		$this->factory->each(function ($repo) use ($post_id, $include_attributes, &$results, $exclude_stages, $restricted) {
-			$results = array_merge($results, $repo->getAllForPost($post_id, $include_attributes, $exclude_stages, $restricted));
-		}, $this->include_types);
+		$this->factory->each(function ($repo) use ($post_id, $include_attributes, &$results, $exclude_stages, $includePrivateValues) {
+			$results = array_merge($results, $repo->getAllForPost($post_id, $include_attributes, $exclude_stages, $includePrivateValues));
+		}, $this->include_types, $this->exclude_types);
 
 		return $results;
 	}
@@ -41,7 +42,7 @@ class Ushahidi_Repository_Post_ValueProxy implements ValuesForPostRepository
 
 		$this->factory->each(function ($repo) use ($post_id, &$total) {
 			$total += $repo->deleteAllForPost($post_id);
-		});
+		}, $this->include_types, $this->exclude_types);
 
 		return $total;
 	}
